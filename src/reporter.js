@@ -1,13 +1,13 @@
 var BaseReporter = require('testarmada-magellan').Reporter;
 var Q = require('q');
 var _ = require('lodash');
-var Jsonfile = require('jsonfile');
+var Parser = require('xml2json');
 
 var START_TIME = (new Date()).toISOString();
 
 var settings = {
   verbose: false,
-  path: process.env.JSON_REPORT_PATH || './mocha_report.xml'
+  path: process.env.XUNIT_REPORT_PATH || './mocha_report.xml'
 };
 
 var Reporter = function () {
@@ -96,19 +96,50 @@ Reporter.prototype = {
       failures: this.failures,
       passes: this.passes
     };
-    // write results to json files
-    this._writeJsonReport(testReport);
+    // write results to xml files
+    this._writeXmlReport(testReport);
+
     console.log("\n");
     console.log("============================ Report ============================");
-    console.log("JSON report file is available at: ");
+    console.log("xUnit report file is available at: ");
     console.log(settings.path);
     console.log("================================================================");
     console.log("\n");
   },
 
-  _writeJsonReport: function (data) {
-    Jsonfile.writeFileSync(settings.path, data, { flag: 'w', spaces: 2 });
-  }
+  _writeXmlReport = function (data) {
+    var jsonReport = {
+      testsuite: {
+        name: 'Mocha Tests',
+        tests: data.stats.tests,
+        failures: data.stats.failures,
+        errors: data.stats.failures,
+        skipped: data.stats.pending,
+        timestamp: (new Date()).toGMTString(),
+        time: data.stats.duration / 1000,
+        testcase: []
+      }
+    };
+
+    data.tests.forEach(function (test) {
+      var testcase = {
+        classname: test.fullTitle.replace(test.title, ''),
+        name: test.title,
+        time: test.duration / 1000
+      };
+      // write error if test failed
+      if (!_.isEmpty(test.err)) {
+        testcase.failure = { '$t': '<![CDATA[' + test.err.stack + ']]>' };
+      }
+      // handle pending test
+      if (test.duration === 0) {
+        testcase.time = 'NaN';
+        testcase.skipped = {};
+      }
+      jsonReport.testsuite.testcase.push(testcase);
+    });
+    fs.writeFileSync(settings.path, Parser.toXml(jsonReport, { sanitize: true }));
+  };
 };
 
 module.exports = Reporter;
