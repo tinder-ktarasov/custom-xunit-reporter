@@ -24,4 +24,4 @@ Add the plugin to `magellan.json` in the `reporters` list (note: if this file do
 
 This plugin is configured with environment variables.
 
-- `JSON_REPORT_PATH` - path name where to put the JSON report file, e.g. `./mocha_report.xml`
+- `XUNIT_REPORT_PATH` - path name where to put the xUnit report file, e.g. `./mocha_report.xml`
