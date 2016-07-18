@@ -2,6 +2,8 @@ var BaseReporter = require('testarmada-magellan').Reporter;
 var Q = require('q');
 var _ = require('lodash');
 var Parser = require('xml2json');
+var Fs = require('fs');
+
 
 var START_TIME = (new Date()).toISOString();
 
@@ -78,7 +80,11 @@ Reporter.prototype = {
     } else {
       this.stats.failures = this.stats.failures + 1;
       // record err message & stack trace into report
-      testObject.err = JSON.parse(test.stdout).failures[0].err;
+      try {
+        testObject.err = JSON.parse(test.stdout).failures[0].err;
+      } catch (err) {
+        testObject.err = 'Unknown error (test was killed?)'
+      }
       this.failures.push(testObject);
     }
   },
@@ -107,7 +113,7 @@ Reporter.prototype = {
     console.log("\n");
   },
 
-  _writeXmlReport = function (data) {
+  _writeXmlReport: function (data) {
     var jsonReport = {
       testsuite: {
         name: 'Mocha Tests',
@@ -138,8 +144,8 @@ Reporter.prototype = {
       }
       jsonReport.testsuite.testcase.push(testcase);
     });
-    fs.writeFileSync(settings.path, Parser.toXml(jsonReport, { sanitize: true }));
-  };
+    Fs.writeFileSync(settings.path, Parser.toXml(jsonReport, { sanitize: true }));
+  }
 };
 
 module.exports = Reporter;
