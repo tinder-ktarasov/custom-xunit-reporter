@@ -25,3 +25,10 @@ Add the plugin to `magellan.json` in the `reporters` list (note: if this file do
 This plugin is configured with environment variables.
 
 - `XUNIT_REPORT_PATH` - path name where to put the xUnit report file, e.g. `./mocha_report.xml`
+
+
+# Limitation
+Currently to see the error stack trace in JSON report:
+* add `--reporter json` into your `mocha.opts` file
+* use Magellan version >=8.6.0
+* Magellan option `--max_test_attempts` cannot be set to 1
