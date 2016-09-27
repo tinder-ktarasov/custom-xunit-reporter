@@ -82,12 +82,15 @@ Reporter.prototype = {
       // record err message & stack trace into report
       try {
         var s = test.stdout.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '')
-        // remove Magellan debug info
-        s = s.replace(/Magellan child process start/, '')
         // remove timestamp added by Magellan before each line
         s = s.split('\n').map(function (line) {
           return line.substr(9);
         }).join('\n');
+        passesIndex = s.indexOf('"passes": [');
+        endOfPasses = s.indexOf(']', passesIndex);
+        s = s.substring(0, s.indexOf('}', endOfPasses) + 1); // Remove everything after the last closing curly brace
+        s = '{' + s.substring(s.indexOf('"stats"')); // Remove everything before {"stats"
+        s = s.replace(/(\r\n|\n|\r)/gm, ''); // Remove all line breaks
         testObject.err = JSON.parse(s).failures[0].err;
       } catch (err) {
         testObject.err = 'Unknown error (test was killed?) ' + err;
