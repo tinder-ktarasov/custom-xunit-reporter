@@ -1,18 +1,23 @@
-var BaseReporter = require('testarmada-magellan').Reporter;
-var Q = require('q');
-var _ = require('lodash');
-var Parser = require('xml2json');
-var Fs = require('fs');
-
+/* eslint no-magic-numbers: 0, no-invalid-this: 0 */
+"use strict";
+var Q = require("q");
+var _ = require("lodash");
+var Parser = require("xml2json");
+var fs = require("fs");
 
 var START_TIME = (new Date()).toISOString();
 
 var settings = {
   verbose: false,
-  path: process.env.XUNIT_REPORT_PATH || './mocha_report.xml'
+  path: process.env.XUNIT_REPORT_PATH || "./mocha_report.xml"
 };
 
-var Reporter = function () {
+var Reporter = function (opts) {
+  this.opts = _.assign({
+    fs: fs,
+    console: console,
+    settings: settings
+  }, opts);
 };
 
 Reporter.prototype = {
@@ -39,17 +44,18 @@ Reporter.prototype = {
   },
 
   listenTo: function (testRun, test, source) {
-    source.addListener('message', this._handleMessage.bind(this, testRun, test));
+    source.addListener("message", this._handleMessage.bind(this, testRun, test));
   },
 
   _handleMessage: function (testRun, test, msg) {
-    if (settings.verbose) {
-      console.log("json reporter received message: ");
-      console.log(msg);
+    if (this.opts.settings.verbose) {
+      this.opts.console.log("json reporter received message: ");
+      this.opts.console.log(msg);
     }
-    if (msg.type === 'worker-status') {
+    if (msg.type === "worker-status") {
       var passCondition = msg.passed;
-      var failCondition = (!msg.passed && msg.status === 'finished' && (test.maxAttempts === test.attempts + 1));
+      var failCondition =
+        !msg.passed && msg.status === "finished" && test.maxAttempts === test.attempts + 1;
       if (passCondition || failCondition) {
         this._addResult(test, msg);
       }
@@ -81,19 +87,23 @@ Reporter.prototype = {
       this.stats.failures = this.stats.failures + 1;
       // record err message & stack trace into report
       try {
-        var s = test.stdout.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '')
+        var s = test.stdout.replace(
+          /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g,
+          "");
         // remove timestamp added by Magellan before each line
-        s = s.split('\n').map(function (line) {
+        s = s.split("\n").map(function (line) {
           return line.substr(9);
-        }).join('\n');
-        passesIndex = s.indexOf('"passes": [');
-        endOfPasses = s.indexOf(']', passesIndex);
-        s = s.substring(0, s.indexOf('}', endOfPasses) + 1); // Remove everything after the last closing curly brace
-        s = '{' + s.substring(s.indexOf('"stats"')); // Remove everything before {"stats"
-        s = s.replace(/(\r\n|\n|\r)/gm, ''); // Remove all line breaks
+        }).join("\n");
+        var passesIndex = s.indexOf("\"passes\": [");
+        var endOfPasses = s.indexOf("]", passesIndex);
+        // Remove everything after the last closing curly brace
+        s = s.substring(0, s.indexOf("}", endOfPasses) + 1);
+        // Remove everything before {"stats"
+        s = "{" + s.substring(s.indexOf("\"stats\""));
+        s = s.replace(/(\r\n|\n|\r)/gm, ""); // Remove all line breaks
         testObject.err = JSON.parse(s).failures[0].err;
       } catch (err) {
-        testObject.err = 'Unknown error (test was killed?) ' + err;
+        testObject.err = "Unknown error (test was killed?) " + err;
       }
       this.failures.push(testObject);
     }
@@ -115,18 +125,18 @@ Reporter.prototype = {
     // write results to xml files
     this._writeXmlReport(testReport);
 
-    console.log("\n");
-    console.log("============================ Report ============================");
-    console.log("xUnit report file is available at: ");
-    console.log(settings.path);
-    console.log("================================================================");
-    console.log("\n");
+    this.opts.console.log("\n");
+    this.opts.console.log("============================ Report ============================");
+    this.opts.console.log("xUnit report file is available at: ");
+    this.opts.console.log(this.opts.settings.path);
+    this.opts.console.log("================================================================");
+    this.opts.console.log("\n");
   },
 
   _writeXmlReport: function (data) {
     var jsonReport = {
       testsuite: {
-        name: 'Mocha Tests',
+        name: "Mocha Tests",
         tests: data.stats.tests,
         failures: data.stats.failures,
         errors: data.stats.failures,
@@ -137,24 +147,26 @@ Reporter.prototype = {
       }
     };
 
+    var self = this;
     data.tests.forEach(function (test) {
       var testcase = {
-        classname: test.fullTitle.replace(test.title, ''),
+        classname: test.fullTitle.replace(test.title, ""),
         name: test.title,
         time: test.duration / 1000
       };
       // write error if test failed
       if (!_.isEmpty(test.err)) {
-        testcase.failure = { '$t': '<![CDATA[' + test.err.stack + ']]>' };
+        testcase.failure = { "$t": "<![CDATA[" + test.err.stack + "]]>" };
       }
       // handle pending test
       if (test.duration === 0) {
-        testcase.time = 'NaN';
+        testcase.time = "NaN";
         testcase.skipped = {};
       }
       jsonReport.testsuite.testcase.push(testcase);
     });
-    Fs.writeFileSync(settings.path, Parser.toXml(jsonReport, { sanitize: true }));
+    self.opts.fs.writeFileSync(this.opts.settings.path,
+      Parser.toXml(jsonReport, { sanitize: true }));
   }
 };
 
