@@ -1,17 +1,17 @@
-/* eslint no-undef: 0, no-unused-expressions: 0, callback-return: 0 */
+/* eslint no-undef: 0, no-unused-expressions: 0, callback-return: 0, no-console: 0 */
 "use strict";
-var expect = require("chai").expect;
-var Reporter = require("../src/reporter");
-var _ = require("lodash");
-var sinon = require("sinon");
+const expect = require("chai").expect;
+const Reporter = require("../src/reporter");
+const _ = require("lodash");
+const sinon = require("sinon");
 
-var _opts = function (opts) {
+const _opts = (opts) => {
   return _.merge({
     console: {
-      log: function () {}
+      log: () => {}
     },
     fs: {
-      writeFileSync: function () {}
+      writeFileSync: () => {}
     },
     settings: {
       verbose: true,
@@ -20,38 +20,38 @@ var _opts = function (opts) {
   }, opts);
 };
 
-describe("reporter", function () {
-  it("should exist", function () {
+describe("reporter", () => {
+  it("should exist", () => {
     expect(Reporter).to.not.be.null;
   });
 
-  it("should initialize", function (done) {
-    var r = new Reporter(_opts());
-    r.initialize().then(function () {
+  it("should initialize", (done) => {
+    const r = new Reporter(_opts());
+    r.initialize().then(() => {
       expect(r.tests).to.eql([]);
       done();
     });
   });
 
-  it("should flush", function (done) {
-    var spy = sinon.spy();
-    var r = new Reporter(_opts({
+  it("should flush", (done) => {
+    const spy = sinon.spy();
+    const r = new Reporter(_opts({
       console: {
         log: spy
       }
     }));
-    r.initialize().then(function () {
+    r.initialize().then(() => {
       r.flush();
       expect(spy.called).to.be.true;
       done();
     });
   });
 
-  it("should listen to messages", function (done) {
-    var r = new Reporter(_opts({}));
-    r.initialize().then(function () {
+  it("should listen to messages", (done) => {
+    const r = new Reporter(_opts({}));
+    r.initialize().then(() => {
       r.listenTo(null, null, {
-        addListener: function (name, cb) {
+        addListener: (name, cb) => {
           expect(name).to.eql("message");
           expect(cb).to.not.be.null;
           cb("a", "b", {
@@ -63,13 +63,13 @@ describe("reporter", function () {
     });
   });
 
-  it("should handle less than max attempts", function (done) {
-    var r = new Reporter(_opts({
+  it("should handle less than max attempts", (done) => {
+    const r = new Reporter(_opts({
       settings: {
         verbose: false
       }
     }));
-    r.initialize().then(function () {
+    r.initialize().then(() => {
       r.listenTo("a", {
         maxAttempts: 2,
         attempts: 0,
@@ -77,7 +77,7 @@ describe("reporter", function () {
           title: "foo"
         }
       }, {
-        addListener: function (name, cb) {
+        addListener: (name, cb) => {
           expect(name).to.eql("message");
           expect(cb).to.not.be.null;
           cb({
@@ -91,9 +91,9 @@ describe("reporter", function () {
     });
   });
 
-  it("should handle pending", function (done) {
-    var r = new Reporter(_opts({}));
-    r.initialize().then(function () {
+  it("should handle pending", (done) => {
+    const r = new Reporter(_opts({}));
+    r.initialize().then(() => {
       r.listenTo("a", {
         maxAttempts: 2,
         attempts: 1,
@@ -103,7 +103,7 @@ describe("reporter", function () {
           pending: true
         }
       }, {
-        addListener: function (name, cb) {
+        addListener: (name, cb) => {
           expect(name).to.eql("message");
           expect(cb).to.not.be.null;
           cb({
@@ -122,9 +122,9 @@ describe("reporter", function () {
     });
   });
 
-  it("should handle a passing test", function (done) {
-    var r = new Reporter(_opts({}));
-    r.initialize().then(function () {
+  it("should handle a passing test", (done) => {
+    const r = new Reporter(_opts({}));
+    r.initialize().then(() => {
       r.listenTo("a", {
         maxAttempts: 2,
         attempts: 1,
@@ -134,7 +134,7 @@ describe("reporter", function () {
         },
         runningTime: 100
       }, {
-        addListener: function (name, cb) {
+        addListener: (name, cb) => {
           expect(name).to.eql("message");
           expect(cb).to.not.be.null;
           cb({
@@ -157,9 +157,9 @@ describe("reporter", function () {
     });
   });
 
-  it("should handle a failing test", function (done) {
-    var r = new Reporter(_opts({}));
-    r.initialize().then(function () {
+  it("should handle a failing test", (done) => {
+    const r = new Reporter(_opts({}));
+    r.initialize().then(() => {
       r.listenTo("a", {
         maxAttempts: 2,
         attempts: 1,
@@ -170,7 +170,7 @@ describe("reporter", function () {
         stdout: "",
         runningTime: 100
       }, {
-        addListener: function (name, cb) {
+        addListener: (name, cb) => {
           expect(name).to.eql("message");
           expect(cb).to.not.be.null;
           cb({

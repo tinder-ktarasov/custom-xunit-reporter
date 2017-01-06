@@ -1,27 +1,27 @@
-/* eslint no-magic-numbers: 0, no-invalid-this: 0 */
+/* eslint no-magic-numbers: 0, no-invalid-this: 0, max-statements: 0, prefer-template: 0 */
 "use strict";
-var Q = require("q");
-var _ = require("lodash");
-var Parser = require("xml2json");
-var fs = require("fs");
+const Q = require("q");
+const _ = require("lodash");
+const Parser = require("xml2json");
+const fs = require("fs");
 
-var START_TIME = (new Date()).toISOString();
+const START_TIME = (new Date()).toISOString();
 
-var settings = {
+const settings = {
   verbose: false,
   path: process.env.XUNIT_REPORT_PATH || "./mocha_report.xml"
 };
 
-var Reporter = function (opts) {
-  this.opts = _.assign({
-    fs: fs,
-    console: console,
-    settings: settings
-  }, opts);
-};
+class Reporter {
+  constructor(opts) {
+    this.opts = _.assign({
+      fs,
+      console,
+      settings
+    }, opts);
+  }
 
-Reporter.prototype = {
-  initialize: function () {
+  initialize() {
     this.tests = [];
     this.pending = [];
     this.passes = [];
@@ -37,35 +37,35 @@ Reporter.prototype = {
       end: START_TIME,
       duration: 0
     };
-    var deferred = Q.defer();
+    const deferred = Q.defer();
 
     deferred.resolve();
     return deferred.promise;
-  },
+  }
 
-  listenTo: function (testRun, test, source) {
+  listenTo(testRun, test, source) {
     source.addListener("message", this._handleMessage.bind(this, testRun, test));
-  },
+  }
 
-  _handleMessage: function (testRun, test, msg) {
+  _handleMessage(testRun, test, msg) {
     if (this.opts.settings.verbose) {
       this.opts.console.log("json reporter received message: ");
       this.opts.console.log(msg);
     }
     if (msg.type === "worker-status") {
-      var passCondition = msg.passed;
-      var failCondition =
+      const passCondition = msg.passed;
+      const failCondition =
         !msg.passed && msg.status === "finished" && test.maxAttempts === test.attempts + 1;
       if (passCondition || failCondition) {
         this._addResult(test, msg);
       }
     }
-  },
+  }
 
-  _addResult: function (test, msg) {
+  _addResult(test, msg) {
     // update total tests cases including pending ones
     this.stats.tests = this.stats.tests + 1;
-    var testObject = {
+    const testObject = {
       title: test.locator.title,
       fullTitle: test.locator.name,
       duration: test.runningTime,
@@ -87,15 +87,15 @@ Reporter.prototype = {
       this.stats.failures = this.stats.failures + 1;
       // record err message & stack trace into report
       try {
-        var s = test.stdout.replace(
+        let s = test.stdout.replace(
           /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g,
           "");
         // remove timestamp added by Magellan before each line
-        s = s.split("\n").map(function (line) {
+        s = s.split("\n").map((line) => {
           return line.substr(9);
         }).join("\n");
-        var passesIndex = s.indexOf("\"passes\": [");
-        var endOfPasses = s.indexOf("]", passesIndex);
+        const passesIndex = s.indexOf("\"passes\": [");
+        const endOfPasses = s.indexOf("]", passesIndex);
         // Remove everything after the last closing curly brace
         s = s.substring(0, s.indexOf("}", endOfPasses) + 1);
         // Remove everything before {"stats"
@@ -107,15 +107,15 @@ Reporter.prototype = {
       }
       this.failures.push(testObject);
     }
-  },
+  }
 
-  flush: function () {
+  flush() {
     // record the end time and duration
     this.stats.end = (new Date()).toISOString();
     this.stats.duration = Date.parse(this.stats.end) - Date.parse(START_TIME);
     // get the final count on suites
     this.stats.suites = _.uniq(this.suites).length;
-    var testReport = {
+    const testReport = {
       stats: this.stats,
       tests: this.tests,
       pending: this.pending,
@@ -131,10 +131,10 @@ Reporter.prototype = {
     this.opts.console.log(this.opts.settings.path);
     this.opts.console.log("================================================================");
     this.opts.console.log("\n");
-  },
+  }
 
-  _writeXmlReport: function (data) {
-    var jsonReport = {
+  _writeXmlReport(data) {
+    const jsonReport = {
       testsuite: {
         name: "Mocha Tests",
         tests: data.stats.tests,
@@ -147,9 +147,8 @@ Reporter.prototype = {
       }
     };
 
-    var self = this;
-    data.tests.forEach(function (test) {
-      var testcase = {
+    data.tests.forEach((test) => {
+      const testcase = {
         classname: test.fullTitle.replace(test.title, ""),
         name: test.title,
         time: test.duration / 1000
@@ -165,9 +164,9 @@ Reporter.prototype = {
       }
       jsonReport.testsuite.testcase.push(testcase);
     });
-    self.opts.fs.writeFileSync(this.opts.settings.path,
+    this.opts.fs.writeFileSync(this.opts.settings.path,
       Parser.toXml(jsonReport, { sanitize: true }));
   }
-};
+}
 
 module.exports = Reporter;
