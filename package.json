@@ -4,7 +4,11 @@
   "description": "Magellan xUnit reporter plugin",
   "main": "index.js",
   "scripts": {
-    "test": "mocha"
+    "test": "mocha && npm run lint && npm run coverage && npm run check-coverage",
+    "dev-test": "mocha",
+    "lint": "eslint *.js src/*.js test/**",
+    "coverage": "istanbul cover _mocha -- --recursive",
+    "check-coverage": "istanbul check-coverage --statement 95 --function 95 --branch 90"
   },
   "repository": {
     "type": "git",
@@ -20,5 +24,16 @@
     "lodash": "^4.0.1",
     "q": "^1.4.1",
     "xml2json": "0.9.1"
+  },
+  "devDependencies": {
+    "babel-eslint": "^7.1.1",
+    "chai": "^3.4.1",
+    "chai-as-promised": "^5.3.0",
+    "eslint": "^3.12.2",
+    "eslint-config-walmart": "^1.1.0",
+    "eslint-plugin-filenames": "^1.1.0",
+    "istanbul": "^0.4.5",
+    "mocha": "^2.2.4",
+    "sinon": "^1.17.6"
   }
 }
