@@ -1,5 +1,7 @@
 # Magellan xUnit Reporter Plugin
 
+[![Codecov](https://img.shields.io/codecov/c/github/TestArmada/magellan-xunit-reporter.svg)]()
+
 This project is a plugin for Magellan which allows you to report test information in a XML file in xUnit format.
 
 # Installation
