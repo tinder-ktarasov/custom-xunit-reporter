@@ -1,0 +1,4 @@
+---
+extends:
+  - "walmart/configurations/es6-node"
+  
