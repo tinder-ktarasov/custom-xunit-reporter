@@ -166,7 +166,7 @@ Reporter.prototype = {
     _.forOwn(data.suites, function (suite, suiteName) {
       var suiteReport = {
         name: suiteName,
-        package: suiteName.environment,
+        package: suite.environment,
         testcase: [],
 
         tests: Object.keys(suite.tests).length,
