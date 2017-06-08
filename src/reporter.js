@@ -87,6 +87,23 @@ Reporter.prototype = {
     this.suites[suite].tests[test.locator.toString()] = testObject;
 
     this.suites[suite].stats.duration += test.runningTime;
+
+    // record err message into report
+    var filteredConsole = test.stdout.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
+    // remove timestamp added by Magellan before each line
+    filteredConsole = filteredConsole.split('\n').map(function (line) {
+      return line.substr(9);
+    }).join('\n');
+
+    // Did we get JUnit XML from the worker as console output?
+    var magellanXml = filteredConsole.match(/^___MAGELLAN_BEGIN_XML___$\s*([\S\s]+)\s*^___MAGELLAN_END_XML___$/m);
+    if (magellanXml !== null) {
+      // Yes. So replace testcase info with it
+      // `reversible` fixes `duplicate stdout attribute` problem
+      var junitReport = Parser.toJson(magellanXml[1], { object: true, reversible: true });
+      testObject._junitTestcase = junitReport.testsuites.testsuite.testcase;
+    }
+
     if (msg.passed) {
       // if test is passed because of pending
       if (test.locator.pending) {
@@ -103,16 +120,10 @@ Reporter.prototype = {
       this.stats.failures += 1;
       this.suites[suite].stats.failures += 1;
 
-      // record err message into report
-      var s = test.stdout.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
-      // remove timestamp added by Magellan before each line
-      s = s.split('\n').map(function (line) {
-         return line.substr(9);
-      }).join('\n');
-      var errorLine = s.match(/^\s*✖\s*(.*)$/m);
-
+      var errorLine = filteredConsole.match(/^\s*✖\s*(.*)$/m);
       testObject.errShort = errorLine ? errorLine[1] : '';
-      testObject.err = s;
+      testObject.err = filteredConsole;
+
       this.failures.push(testObject);
     }
   },
@@ -174,18 +185,28 @@ Reporter.prototype = {
           name: test.name,
           time: test.duration / 1000
         };
-        // write error if test failed
-        if (!_.isEmpty(test.err)) {
-          testcase.failure = {
-            message: test.errShort,
-            '$t': '<![CDATA[' + test.err + ']]>'
-          };
-        }
         // handle pending test
         if (test.duration === 0) {
           testcase.time = 'NaN';
           testcase.skipped = {};
         }
+
+        if (test._junitTestcase) {
+          testcase = Object.assign(
+            testcase,
+            test._junitTestcase,
+            { time: testcase.time, skipped: testcase.skipped } // Magellan knows better about these
+          );
+        } else {
+          // write error if test failed
+          if (!_.isEmpty(test.err)) {
+            testcase.failure = {
+              message: test.errShort,
+              '$t': '<![CDATA[' + test.err + ']]>'
+            };
+          }
+        }
+
         suiteReport.testcase.push(testcase);
       });
     });
