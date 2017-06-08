@@ -104,7 +104,15 @@ Reporter.prototype = {
       this.suites[suite].stats.failures += 1;
 
       // record err message into report
-      testObject.err = test.stdout.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '')
+      var s = test.stdout.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
+      // remove timestamp added by Magellan before each line
+      s = s.split('\n').map(function (line) {
+         return line.substr(9);
+      }).join('\n');
+      var errorLine = s.match(/^\s*✖\s*(.*)$/m);
+
+      testObject.errShort = errorLine ? errorLine[1] : '';
+      testObject.err = s;
       this.failures.push(testObject);
     }
   },
@@ -168,7 +176,10 @@ Reporter.prototype = {
         };
         // write error if test failed
         if (!_.isEmpty(test.err)) {
-          testcase.failure = { '$t': '<![CDATA[' + test.err + ']]>' };
+          testcase.failure = {
+            message: test.errShort,
+            '$t': '<![CDATA[' + test.err + ']]>'
+          };
         }
         // handle pending test
         if (test.duration === 0) {
