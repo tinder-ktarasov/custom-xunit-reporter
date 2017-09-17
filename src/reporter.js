@@ -1,8 +1,8 @@
-var BaseReporter = require('testarmada-magellan').Reporter;
 var Q = require('q');
 var _ = require('lodash');
 var Parser = require('xml2json');
 var Fs = require('fs');
+var path = require('path');
 
 
 var START_TIME = (new Date()).toISOString();
@@ -17,11 +17,10 @@ var Reporter = function () {
 
 Reporter.prototype = {
   initialize: function () {
-    this.tests = [];
     this.pending = [];
     this.passes = [];
     this.failures = [];
-    this.suites = [];
+    this.suites = {};
     this.stats = {
       suites: 0,
       tests: 0,
@@ -59,42 +58,72 @@ Reporter.prototype = {
   _addResult: function (test, msg) {
     // update total tests cases including pending ones
     this.stats.tests = this.stats.tests + 1;
+    var classFile = test.locator.filename.split(path.sep).pop();
+    var module = classFile.slice(0, classFile.lastIndexOf('.'));
+
+    var suite = test.profile.nightwatchEnv + " : " + module;
     var testObject = {
-      title: test.locator.title,
-      fullTitle: test.locator.name,
+      name: test.locator.testcase,
+      classname: suite,
       duration: test.runningTime,
       err: {}
     };
-    this.tests.push(testObject);
-    this.suites.push(test.locator.filename);
+    if (typeof this.suites[suite] === 'undefined') {
+      this.suites[suite] = {
+        name: suite,
+        environment: test.profile.nightwatchEnv,
+        tests: {},
+        timestamp: new Date(test.startTime).toISOString(),
+        stats: {
+          suites: 0,
+          tests: 0,
+          passes: 0,
+          pending: 0,
+          failures: 0,
+          duration: 0
+        }
+      };
+    }
+    this.suites[suite].tests[test.locator.toString()] = testObject;
+
+    this.suites[suite].stats.duration += test.runningTime;
+
+    // record err message into report
+    var filteredConsole = test.stdout.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
+    // remove timestamp added by Magellan before each line
+    filteredConsole = filteredConsole.split('\n').map(function (line) {
+      return line.substr(9);
+    }).join('\n');
+
+    // Did we get JUnit XML from the worker as console output?
+    var magellanXml = filteredConsole.match(/^___MAGELLAN_BEGIN_XML___$\s*([\S\s]+)\s*^___MAGELLAN_END_XML___$/m);
+    if (magellanXml !== null) {
+      // Yes. So replace testcase info with it
+      // `reversible` fixes `duplicate stdout attribute` problem
+      var junitReport = Parser.toJson(magellanXml[1], { object: true, reversible: true });
+      testObject._junitTestcase = junitReport.testsuites.testsuite.testcase;
+    }
+
     if (msg.passed) {
       // if test is passed because of pending
       if (test.locator.pending) {
-        this.stats.pending = this.stats.pending + 1;
+        this.stats.pending += 1;
+        this.suites[suite].stats.pending += 1;
         testObject.duration = 0;
         this.pending.push(testObject);
       } else {
-        this.stats.passes = this.stats.passes + 1;
+        this.stats.passes += 1;
+        this.suites[suite].stats.passes += 1;
         this.passes.push(testObject);
       }
     } else {
-      this.stats.failures = this.stats.failures + 1;
-      // record err message & stack trace into report
-      try {
-        var s = test.stdout.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '')
-        // remove timestamp added by Magellan before each line
-        s = s.split('\n').map(function (line) {
-          return line.substr(9);
-        }).join('\n');
-        passesIndex = s.indexOf('"passes": [');
-        endOfPasses = s.indexOf(']', passesIndex);
-        s = s.substring(0, s.indexOf('}', endOfPasses) + 1); // Remove everything after the last closing curly brace
-        s = '{' + s.substring(s.indexOf('"stats"')); // Remove everything before {"stats"
-        s = s.replace(/(\r\n|\n|\r)/gm, ''); // Remove all line breaks
-        testObject.err = JSON.parse(s).failures[0].err;
-      } catch (err) {
-        testObject.err = 'Unknown error (test was killed?) ' + err;
-      }
+      this.stats.failures += 1;
+      this.suites[suite].stats.failures += 1;
+
+      var errorLine = filteredConsole.match(/^\s*✖\s*(.*)$/m);
+      testObject.errShort = errorLine ? errorLine[1] : '';
+      testObject.err = filteredConsole;
+
       this.failures.push(testObject);
     }
   },
@@ -104,10 +133,10 @@ Reporter.prototype = {
     this.stats.end = (new Date()).toISOString();
     this.stats.duration = Date.parse(this.stats.end) - Date.parse(START_TIME);
     // get the final count on suites
-    this.stats.suites = _.uniq(this.suites).length;
+    this.stats.suites = this.suites.length;
     var testReport = {
       stats: this.stats,
-      tests: this.tests,
+      suites: this.suites,
       pending: this.pending,
       failures: this.failures,
       passes: this.passes
@@ -125,34 +154,61 @@ Reporter.prototype = {
 
   _writeXmlReport: function (data) {
     var jsonReport = {
-      testsuite: {
-        name: 'Mocha Tests',
+      testsuites: {
         tests: data.stats.tests,
         failures: data.stats.failures,
         errors: data.stats.failures,
-        skipped: data.stats.pending,
-        timestamp: (new Date()).toGMTString(),
-        time: data.stats.duration / 1000,
-        testcase: []
+
+        testsuite: []
       }
     };
 
-    data.tests.forEach(function (test) {
-      var testcase = {
-        classname: test.fullTitle.replace(test.title, ''),
-        name: test.title,
-        time: test.duration / 1000
+    _.forOwn(data.suites, function (suite, suiteName) {
+      var suiteReport = {
+        name: suiteName,
+        package: suite.environment,
+        testcase: [],
+
+        tests: Object.keys(suite.tests).length,
+        failures: suite.stats.failures,
+        errors: suite.stats.failures,
+        skipped: suite.stats.pending,
+        time: suite.stats.duration / 1000,
+        timestamp: suite.stats.timestamp
       };
-      // write error if test failed
-      if (!_.isEmpty(test.err)) {
-        testcase.failure = { '$t': '<![CDATA[' + test.err.stack + ']]>' };
-      }
-      // handle pending test
-      if (test.duration === 0) {
-        testcase.time = 'NaN';
-        testcase.skipped = {};
-      }
-      jsonReport.testsuite.testcase.push(testcase);
+
+      jsonReport.testsuites.testsuite.push(suiteReport);
+
+      _.forOwn(suite.tests, function (test) {
+        var testcase = {
+          classname: test.classname,
+          name: test.name,
+          time: test.duration / 1000
+        };
+        // handle pending test
+        if (test.duration === 0) {
+          testcase.time = 'NaN';
+          testcase.skipped = {};
+        }
+
+        if (test._junitTestcase) {
+          testcase = Object.assign(
+            testcase,
+            test._junitTestcase,
+            { time: testcase.time, skipped: testcase.skipped } // Magellan knows better about these
+          );
+        } else {
+          // write error if test failed
+          if (!_.isEmpty(test.err)) {
+            testcase.failure = {
+              message: test.errShort,
+              '$t': '<![CDATA[' + test.err + ']]>'
+            };
+          }
+        }
+
+        suiteReport.testcase.push(testcase);
+      });
     });
     Fs.writeFileSync(settings.path, Parser.toXml(jsonReport, { sanitize: true }));
   }
