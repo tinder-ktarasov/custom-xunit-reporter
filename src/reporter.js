@@ -210,7 +210,12 @@ Reporter.prototype = {
         suiteReport.testcase.push(testcase);
       });
     });
-    Fs.writeFileSync(settings.path, Parser.toXml(jsonReport, { sanitize: true }));
+    var xml = Parser.toXml(jsonReport, { sanitize: true })
+    xml = xml.replace(/(message=")([^"]+)(")/g,
+      // keep newlines in a message from being normalized out
+      function (match, p1, p2, p3) { return (p1 + p2.replace(/\r\n|\r|\n/g, '&#xD;&#xA;') + p3); }
+    )
+    Fs.writeFileSync(settings.path, xml);
   }
 };
 
